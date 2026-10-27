@@ -1,0 +1,45 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1b7f4b"><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png"><title>Attendance</title><script src="config.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font:17px system-ui,sans-serif;background:#f4faf6;color:#1c2b22}
+header{background:#1b7f4b;color:#fff;padding:14px 16px;display:flex;justify-content:space-between}header a{color:#fff}
+main{max-width:520px;margin:auto;padding:14px}.card{background:#fff;border:1px solid #cfe3d6;border-radius:14px;padding:16px;margin-bottom:12px}
+input{width:100%;padding:13px;margin:6px 0;border:1px solid #9bb;border-radius:10px;font-size:17px}
+button{width:100%;padding:20px;border:0;border-radius:14px;background:#1b7f4b;color:#fff;font-size:22px}button:disabled{background:#9db8a8}.out{background:#c0392b}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g div{background:#e8f5ee;border-radius:10px;padding:10px}.g b{display:block;font-size:24px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px;border-bottom:1px solid #dde}.lk{background:none;color:#1b7f4b;font-size:16px;padding:8px;width:auto}
+#m{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);padding:12px 18px;border-radius:10px;color:#fff;display:none}
+button:active,button.on,button.busy{filter:brightness(.62);transform:scale(.98)}.lk:active,.lk.on{background:#cde5d5;filter:none}#ld{position:fixed;top:0;left:0;height:4px;width:0;background:#f5b700;transition:width .5s;z-index:9}input[type=month]{margin-bottom:10px}
+</style></head><body>
+<header><b>Attendance</b><span id=w></span></header><main id=a></main><div id=ld></div><div id=m></div>
+<script>
+let U=null;try{U=JSON.parse(localStorage.getItem('u'))}catch(e){}
+const $=i=>document.getElementById(i);
+const hm=h=>{if(h==null||h==='')return'--:--';const m=Math.round(h*60);return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};
+const tm=s=>s?s.slice(11,16):'--:--';
+let LC=0;function ld(d){LC+=d;$('ld').style.width=LC>0?'85%':'0'}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('button');if(b&&!b.disabled){b.classList.add('on');setTimeout(()=>b.classList.remove('on'),700)}});
+function toast(t,bad){const m=$('m');m.textContent=t;m.style.background=bad?'#c0392b':'#1b7f4b';m.style.display='block';setTimeout(()=>m.style.display='none',4000)}
+function call(a,p){ld(1);return callRaw(a,p).finally(()=>ld(-1))}
+function callRaw(a,p){return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({tok:U?U.token:'',act:a,p:p||{}})}).then(r=>r.json()).then(r=>{if(r.ok)return r.data;if(r.error=='SESSION'){out();throw new Error('Please login again.')}throw new Error(r.error)},e=>{throw new Error('No internet. Please try again.')})}
+function out(){U=null;try{localStorage.removeItem('u')}catch(e){}boot()}
+function boot(){$('w').innerHTML=U?U.name+' · <a href=# onclick="out()">Logout</a>':'';
+ if(!U)return $('a').innerHTML='<div class=card><h2>Login</h2><input id=i placeholder="Employee ID" autocapitalize=characters><input id=p type=password placeholder=Password><button id=lb onclick="login()">Login</button></div>';
+ home()}
+async function login(){const lb=$('lb');lb.classList.add('busy');lb.textContent='Please wait…';try{U=await call('login',{id:$('i').value,pw:$('p').value});try{localStorage.setItem('u',JSON.stringify(U))}catch(e){}boot()}catch(e){toast(e.message,1);lb.classList.remove('busy');lb.textContent='Login'}}
+async function home(s){try{s=s||await call('today');const r=s.rec||{};
+ $('a').innerHTML='<div class=card><h2>Hello, '+s.name+'</h2>ID: <b>'+s.id+'</b> · '+s.date+'<br>Status: <b>'+({in:'Not punched in',out:'Working',done:'Completed'})[s.btn]+'</b><br><br><button id=b class="'+(s.btn=='out'?'out':'')+'" '+(s.btn=='done'?'disabled':'')+' onclick="punch(\''+s.btn+'\')">'+({in:'Punch In',out:'Punch Out',done:'Attendance Completed'})[s.btn]+'</button></div>'
+ +'<div class="card g"><div>Punch In<b>'+tm(r.in)+'</b></div><div>Punch Out<b>'+tm(r.out)+'</b></div><div>Worked<b>'+hm(r.net)+'</b></div><div>Overtime<b>'+hm(r.ot)+'</b>'+(r.ot>0?r.st:'')+'</div></div><button class=lk onclick="hist()">Attendance history</button> <button class=lk onclick="regPage()">Forgot to punch? Regularize</button>';if(s.btn!='done')warm()}catch(e){toast(e.message,1)}}
+let LOC=null,WID=null,LAST=0,DENY=0;   // GPS is warmed up while the home screen is open, so punching does not wait
+function warm(){try{if(!navigator.geolocation||WID!=null)return;DENY=0;WID=navigator.geolocation.watchPosition(p=>{const q=p.coords,n=Date.now();LAST=n;if(!LOC||q.accuracy<=LOC.acc||n-LOC.t>20000)LOC={lat:q.latitude,lng:q.longitude,acc:q.accuracy,t:n}},()=>{DENY=1},{enableHighAccuracy:true,maximumAge:0});setTimeout(()=>{try{navigator.geolocation.clearWatch(WID)}catch(e){}WID=null},30000)}catch(e){}}
+function getLoc(){return new Promise(res=>{try{warm();let n=0;const give=()=>(LOC&&Date.now()-LAST<30000)?{lat:LOC.lat,lng:LOC.lng,acc:LOC.acc}:null;
+ const iv=setInterval(()=>{n++;const g=give();if((g&&g.acc<=30)||DENY||n>=30){clearInterval(iv);res(g)}},150)}catch(e){res(null)}})}
+async function punch(t){if(t=='out'&&!confirm('Punch Out now?'))return;const b=$('b');b.disabled=true;b.classList.add('busy');b.textContent='Please wait…';
+ try{const loc=await getLoc(),d=await call('punch',{type:t,loc:loc});toast(t=='in'?'Punched in ✔':'Punched out ✔');home(d)}catch(e){toast(e.message,1);home()}}
+async function hist(m){try{const d=await call('hist',{month:typeof m=='string'?m:''}),r=d.rows;let nt=0,ot=0;r.forEach(x=>{nt+=x.net||0;ot+=x.ot||0});
+ $('a').innerHTML='<button class=lk onclick="home()">&larr; Back</button><div class=card><b>Attendance history</b><input type=month id=mf value="'+d.month+'" onchange="hist(this.value)"><div class=g><div>Days<b>'+r.length+'</b></div><div>Worked<b>'+hm(nt)+'</b></div><div>Overtime<b>'+hm(ot)+'</b></div></div></div><div class=card>'+(r.length?'<table><tr><th>Date</th><th>In</th><th>Out</th><th>Work</th><th>OT</th></tr>'+r.map(x=>'<tr><td>'+x.date.slice(5)+'</td><td>'+tm(x.in)+'</td><td>'+tm(x.out)+'</td><td>'+hm(x.net)+'</td><td>'+hm(x.ot)+(x.ot>0?'<br><small>'+x.st+'</small>':'')+'</td></tr>').join('')+'</table>':'No attendance in this month.')+'</div>'}catch(e){toast(e.message,1)}}
+async function regPage(){try{const r=await call('myreg');
+ $('a').innerHTML='<button class=lk onclick="home()">&larr; Back</button><div class=card><h3>Regularize attendance</h3>Date<input type=date id=rd><div class=g><div>Punch In<input type=time id=ri></div><div>Punch Out<input type=time id=ro></div></div><input id=rr placeholder="Reason (e.g. forgot to punch)"><button onclick="sendReg()">Send request</button></div><div class=card><b>My requests</b><table><tr><th>Date</th><th>In</th><th>Out</th><th>Status</th></tr>'+r.map(x=>'<tr><td>'+x.date.slice(5)+'</td><td>'+tm(x.tin)+'</td><td>'+tm(x.tout)+'</td><td>'+x.st+(x.note?'<br><small>'+x.note+'</small>':'')+'</td></tr>').join('')+'</table></div>'}catch(e){toast(e.message,1)}}
+async function sendReg(){try{await call('reg',{date:$('rd').value,tin:$('ri').value,tout:$('ro').value,reason:$('rr').value});toast('Request sent to admin');regPage()}catch(e){toast(e.message,1)}}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+boot();
+</script></body></html>
